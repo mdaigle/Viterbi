@@ -1,11 +1,5 @@
 var fs = require('fs');
 const assert = require('assert');
-var math = require('mathjs');
-
-math.config({
-    number: 'BigNumber',
-    precision: 10
-});
 
 var STOP_CODONS = ["TAA", "TAG", "TGA"];
 var NUCLEOTIDES = ["A", "C", "G", "T"];
@@ -59,22 +53,30 @@ gbb_contents.forEach(function(line){
     }
 });*/
 
-for (var i = 0; i < 10; i++) {
+for (var i = 1; i < 11; i++) {
+    console.log("Starting round " + i);
+    console.log("Emission Parameters:\n" + emissions);
+    console.log("Transition Parameters:\n" + transitions);
+
     var t_count = {
         "state1": { "state1": 0, "state2": 0 },
         "state2": { "state1": 0, "state2": 0 }
-    }
+    };
     var n_count = {
         "state1": { "A": 0, "C": 0, "G": 0, "T": 0 },
         "state2": { "A": 0, "C": 0, "G": 0, "T": 0 }
-    }
-    var s_count = { "state1": 0, "state2": 0 }
+    };
+    var s_count = { "state1": 0, "state2": 0 };
 
     var viterbi_path = getViterbiPath(s_count, t_count, n_count);
 
-    console.log(s_count);
-    console.log(t_count);
-    console.log(n_count);
+    if (i == 11) {
+        printPathInfo(viterbi_path, -1);
+    } else {
+        printPathInfo(viterbi_path, 5);
+    }
+
+    console.log("Setting new probs");
 
     var total_state_1_transitions = t_count['state1']['state1'] + t_count['state1']['state2'];
 
@@ -105,9 +107,8 @@ for (var i = 0; i < 10; i++) {
     emissions['state2']['C'] = n_count['state2']['C'] / total_state_2_emissions;
     emissions['state2']['G'] = n_count['state2']['G'] / total_state_2_emissions;
     emissions['state2']['T'] = n_count['state2']['T'] / total_state_2_emissions;
-
-    console.log(transitions);
-    console.log(emissions);
+    console.log("Set the new probs");
+    console.log(i);
 }
 
 // TODO: use log probabilities
@@ -115,8 +116,8 @@ for (var i = 0; i < 10; i++) {
 function getViterbiPath(state_count, transition_count, nucleotide_count) {
     var model = [
         {
-            "state1": math.log(math.bignumber(transitions['begin']['state1'])),
-            "state2": math.log(math.bignumber(transitions['begin']['state2']))
+            "state1": Math.log(transitions['begin']['state1']),
+            "state2": Math.log(transitions['begin']['state2'])
         }
     ];
 
@@ -146,18 +147,18 @@ function getViterbiPath(state_count, transition_count, nucleotide_count) {
         var emission_state_2 = emissions['state2'][nucleotide];
 
         // Calculate new state 1 probabilities
-        var state_1_to_state_1 = math.add(math.add(prev_state_1, math.log(math.bignumber(transitions['state1']['state1']))), math.log(math.bignumber(emission_state_1)));
-        var state_2_to_state_1 = math.add(math.add(prev_state_2, math.log(math.bignumber(transitions['state2']['state1']))), math.log(math.bignumber(emission_state_1)));
+        var state_1_to_state_1 = prev_state_1 + Math.log(transitions['state1']['state1']) + Math.log(emission_state_1);
+        var state_2_to_state_1 = prev_state_2 + Math.log(transitions['state2']['state1']) + Math.log(emission_state_1);
 
         // Set the definitive state 1 probability to the maximum
-        model[model_index]['state1'] = math.max(state_1_to_state_1, state_2_to_state_1);
+        model[model_index]['state1'] = Math.max(state_1_to_state_1, state_2_to_state_1);
 
         // Calculate new state 2 probabilities
-        var state_1_to_state_2 = math.add(math.add(prev_state_1, math.log(math.bignumber(transitions['state1']['state2']))), math.log(math.bignumber(emission_state_2)));
-        var state_2_to_state_2 = math.add(math.add(prev_state_2, math.log(math.bignumber(transitions['state2']['state2']))), math.log(math.bignumber(emission_state_2)));
+        var state_1_to_state_2 = prev_state_1 + Math.log(transitions['state1']['state2']) + Math.log(emission_state_2);
+        var state_2_to_state_2 = prev_state_2 + Math.log(transitions['state2']['state2']) + Math.log(emission_state_2);
 
         // Set the definitive state 2 probability to the maximum
-        model[model_index]['state2'] = math.max(state_1_to_state_2, state_2_to_state_2);
+        model[model_index]['state2'] = Math.max(state_1_to_state_2, state_2_to_state_2);
     }
 
     //console.log(model);
@@ -169,10 +170,12 @@ function getViterbiPath(state_count, transition_count, nucleotide_count) {
         var model_index = i + 1;
 
         if (model_index == fasta_contents.length) {
-            if (math.largerEq(model[model_index]['state1'], model[model_index]['state2'])) {
+            if (model[model_index]['state1'] >= model[model_index]['state2']) {
+                console.log("Path Log Probability: " + model[model_index]['state1']);
                 path[i] = 'state1';
                 state_count['state1']++;
             } else {
+                console.log("Path Log Probability: " + model[model_index]['state2']);
                 path[i] = 'state2';
                 state_count['state2']++;
             }
@@ -205,8 +208,8 @@ function getViterbiPath(state_count, transition_count, nucleotide_count) {
 
         if (path[i + 1] == 'state1') {
             // Calculate probabilities for state transitions
-            var state_1_to_state_1 = prev_state_1 * transitions['state1']['state1'] * emission_state_1;
-            var state_2_to_state_1 = prev_state_2 * transitions['state2']['state1'] * emission_state_1;
+            var state_1_to_state_1 = prev_state_1 + Math.log(transitions['state1']['state1']) + Math.log(emission_state_1);
+            var state_2_to_state_1 = prev_state_2 + Math.log(transitions['state2']['state1']) + Math.log(emission_state_1);
 
             if (state_1_to_state_1 == curr_state_1) {
                 path[i] = 'state1';
@@ -222,8 +225,8 @@ function getViterbiPath(state_count, transition_count, nucleotide_count) {
             continue;
         } else {
             // Calculate probabilities for state transitions
-            var state_1_to_state_2 = prev_state_1 * transitions['state1']['state2'] * emission_state_2;
-            var state_2_to_state_2 = prev_state_2 * transitions['state2']['state2'] * emission_state_2;
+            var state_1_to_state_2 = prev_state_1 + Math.log(transitions['state1']['state2']) + Math.log(emission_state_2);
+            var state_2_to_state_2 = prev_state_2 + Math.log(transitions['state2']['state2']) + Math.log(emission_state_2);
 
             if (state_1_to_state_2 == curr_state_2) {
                 path[i] = 'state1';
@@ -257,7 +260,7 @@ function getViterbiPath(state_count, transition_count, nucleotide_count) {
         nucleotide_count[elt][nucleotide]++;
     });
 
-    var output = "";
+    /*var output = "";
     path.forEach(function(elt, i, array){
         if (elt == "state1") {
             output += "F";
@@ -266,21 +269,39 @@ function getViterbiPath(state_count, transition_count, nucleotide_count) {
         }
     });
 
-    console.log(output);
+    console.log(output);*/
 
     return path;
 }
 
-// Print out path stats
-/*var output = "";
-path.forEach(function(elt, i, array){
-    if (elt == "state1") {
-        output += "F";
-    } else {
-        output += "L";
+function printPathInfo(path, k) {
+    var hits = [];
+
+    var inState2 = false;
+    var hit_num = 0;
+
+    path.forEach(function(elt, i, arr){
+        if (elt == 'state2' && !inState2) {
+            hits[hit_num] = {"start": i + 1, "length": 1};
+            inState2 = true;
+        } else if (elt == 'state2' && inState2) {
+            hits[hit_num]['length']++;
+        } else if (inState2){
+            hit_num++;
+            inState2 = false;
+        }
+    });
+
+    console.log("Number of Hits: " + hits.length);
+    console.log("Lengths and Locations of First k:");
+
+    if (k < 0) {
+        k = hits.length;
     }
-});
 
-console.log(output);*/
-
-// Print out
+    for (var i = 0; i < k; i++) {
+        if (hits[i] != undefined) {
+            console.log(i+1, "start: " + hits[i]['start'], "end: " + (hits[i]['start'] + hits[i]['length'] - 1), "length: " + hits[i]['length']);
+        }
+    }
+}
